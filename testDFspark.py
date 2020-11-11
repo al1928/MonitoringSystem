@@ -43,7 +43,7 @@ data = list(resourceTypeDict.values())
 col = ['Time'] + list(resourceTypeDict.keys())
 
 df = None
-for el in column_list[:100]:
+for el in column_list[:6]:
     df_schema = StructType([StructField("Time", FloatType(), True), StructField(el, DoubleType(), True)])
     if df is None:
         df = spark.createDataFrame(resourceTypeDict[el])
