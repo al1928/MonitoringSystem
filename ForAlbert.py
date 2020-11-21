@@ -10,6 +10,19 @@ from IPython.display import display, HTML
 from pyspark.sql.functions import avg 
 from pyspark.mllib.stat import Statistics
 
+def delPoints (df): # УБИРАЕТ ТОЧКИ ИЗ НАЗВАНИЙ СТОЛБЦОВ
+    tempList = []   
+    for col in df.columns:
+        new_name = col.strip()
+        new_name = "".join(new_name.split())
+        new_name = new_name.replace('.','') 
+        tempList.append(new_name)
+    # print(tempList) #Just for the sake of it 
+    df_spark = df.toDF(*tempList)
+    return df_spark
+
+df_spark = delPoints (df_spark)
+
 def delTime(df):   # удаление столбца Time
     columns_to_drop = ['Time'] 
     df_spark = df.drop(*columns_to_drop)
