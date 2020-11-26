@@ -24,7 +24,7 @@ def delPoints(df):  # УБИРАЕТ ТОЧКИ ИЗ НАЗВАНИЙ СТОЛБ
 
 
 def delTime(df):  # удаление столбца Time
-    columns_to_drop = ['Time']
+    columns_to_drop = ['timestamp']
     df_spark = df.drop(*columns_to_drop)
     return df_spark
 
@@ -71,31 +71,51 @@ def getJsonOfFile(file_name: str):
 
 def getResourceDict(json_data: json):
     # по листу метрики из json данных возвращает словарь процессов
+    # Пока не используется
     list_data = json_data['data']['result']  # список словарей по процессам
+    # print(list_data[:3])
     resourceTypeDict = dict(map(lambda x: (x["metric"]["resource_type"], x["values"]), list_data))
     # iterObj = iter(resourceTypeDict)
     # print(list(iterObj))
     return resourceTypeDict
 
 
-def printDF(sprkDF):
-    # какая-то фигня с toPandas() - пофиксить
-    # преобразует спарквский df в пандасовский для нормального визуального отображения
-    newdf = sprkDF.toPandas()
-    return newdf
+def dictOfJsons(json_data, column_count):
+    # возвращает словарь типа: key = timestamp, value = {timestamp:t1, Metric1: V1 ...}
+    list_data = json_data['data']['result']
+    dict_timestamp = dict()
+    for metric in list_data[:column_count]:
+        for t in metric['values']:
+            dict_timestamp[t[0]] = {}
+    for metric in list_data[:column_count]:
+        for t in metric['values']:
+            dict_timestamp[t[0]]['timestamp'] = t[0]
+            dict_timestamp[t[0]][metric['metric']['resource_type']] = float(t[1])
+    # print(f"Size dict_timestamp: {len(list(dict_timestamp))}"
+    #       f"\n Size uniq value {len(set(dict_timestamp))}")
+    return dict_timestamp
+
+
+def createDF(dict_timestamp: dict, spark):
+    # возвращает объединенный df из RDD
+    list_of_dicts = dict_timestamp.values()
+    rdd = spark.sparkContext.parallelize(list_of_dicts)
+    df = rdd.toDF()
+    return df
 
 
 def getJoinedPDF(resourceTypeDict: dict, column_count: int):
     # возвращает склеенный pandas df
+    # Пока не используется
     column_list = list(resourceTypeDict.keys())
     print(len(column_list))
     pdf = None
     for el in column_list[:column_count]:  # изменять срез для получения большего кол-ва столбцов
         if pdf is None:
-            pdf = pd.DataFrame(resourceTypeDict[el], columns=["Time", el])
+            pdf = pd.DataFrame(resourceTypeDict[el], columns=["timestamp", el])
         else:
-            pdf_right = pd.DataFrame(resourceTypeDict[el], columns=["Time", el])
-            pdf = pdf.join(pdf_right.set_index("Time"), on="Time")
+            pdf_right = pd.DataFrame(resourceTypeDict[el], columns=["timestamp", el])
+            pdf = pdf.join(pdf_right.set_index("timestamp"), on="timestamp")
     pdf = pdf.astype(float)
     print(f"#### Columns: {len(pdf.columns)} #### ")
     return pdf
@@ -103,8 +123,8 @@ def getJoinedPDF(resourceTypeDict: dict, column_count: int):
 
 def buildKMeans(spark_df, k: int):
     # возвращает центроиды кластеров
-    vecAssembler = VectorAssembler(inputCols=spark_df.columns[1:], outputCol="features")
-    df_kmeans = vecAssembler.transform(spark_df).select('Time', 'features')
+    vecAssembler = VectorAssembler(inputCols=spark_df.columns[:-1], outputCol="features")
+    df_kmeans = vecAssembler.transform(spark_df).select('timestamp', 'features')
     df_kmeans.show()
     kmeans = KMeans().setK(k).setSeed(1).setFeaturesCol("features")
     model = kmeans.fit(df_kmeans)
@@ -116,10 +136,10 @@ def buildKMeans(spark_df, k: int):
 
 def MethodSilhouette(spark_df, k_max: int):
     # возвращает оптимальное кол-во кластеров
-    vecAssembler = VectorAssembler(inputCols=spark_df.columns[1:], outputCol="features")
-    df_kmeans = vecAssembler.transform(spark_df).select('Time', 'features')
+    k_max += 1
+    vecAssembler = VectorAssembler(inputCols=spark_df.columns[:-1], outputCol="features")
+    df_kmeans = vecAssembler.transform(spark_df).select('timestamp', 'features')
     cost = np.zeros(k_max)
-    evaluator = ClusteringEvaluator()
     for k in range(2, k_max):
         kmeans = KMeans().setK(k).setSeed(1).setFeaturesCol("features")
         model = kmeans.fit(df_kmeans)
@@ -136,6 +156,7 @@ def MethodSilhouette(spark_df, k_max: int):
     plt.show()
     return k_opt
 
+
 spark = SparkSession.builder \
     .master("local") \
     .appName("HistData") \
@@ -145,19 +166,16 @@ spark = SparkSession.builder \
 
 file_name = 'query'
 json_data = getJsonOfFile(file_name)
-resource_type_dict = getResourceDict(json_data)
-pandas_df = getJoinedPDF(resource_type_dict, 400)
-spark_df = spark.createDataFrame(pandas_df)
-
+spark_df = createDF(dictOfJsons(json_data, 100), spark)  # вместо 100 указать кол-во необходимых столбцов
+spark_df.show()
 df_rename = delPoints(spark_df)
-df_whithout_nan = NanSwupNull(df_rename)
-df_avg_null = fill_with_mean(df_whithout_nan, [])
+df_without_nan = NanSwupNull(df_rename)
+df_avg_null = fill_with_mean(df_without_nan, [])
 print(f"Размер датафрейма с усредненными пропусками и переименнованными "
       f"столбцами: {df_avg_null.count()}x{len(df_avg_null.columns)}")
 df_cut = delColumnsWithTheSameValue(df_avg_null)
 print(f"Размер датафрейма с обрезанными константными столбцами: "
       f"{df_cut.count()}x{len(df_cut.columns)}")
 
-k = MethodSilhouette(df_cut, 15)
+k = MethodSilhouette(df_cut, 10)  # 8- максимальное кол-во кластеров для метода силуэтов
 print("Оптимальное значение k: ", k)
-
