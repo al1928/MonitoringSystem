@@ -1,18 +1,6 @@
 from json import dumps
-from numpy.random import choice, randint
 from kafka import KafkaProducer
 
-def get_random_value():
-    new_dict = {}
-
-    branch_list = ['Kazan', 'SPB', 'Novosibirsk', 'Surgut']
-    currency_list = ['RUB', 'USD', 'EUR', 'GBP']
-
-    new_dict['branch'] = choice(branch_list)
-    new_dict['currency'] = choice(currency_list)
-    new_dict['amount'] = randint(-100, 100)
-
-    return new_dict
 
 class KafkaJsonSender:
 
