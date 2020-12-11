@@ -6,7 +6,6 @@ import shutil
 
 import findspark
 findspark.init()
-# findspark.init('C:/StudyPrograms/spark-2.4.7-bin-hadoop2.7')
 
 from pyspark import SparkContext, SparkConf
 from pyspark.streaming import StreamingContext
@@ -14,23 +13,7 @@ from pyspark.sql import Row, SparkSession
 from pyspark.streaming.kafka import KafkaUtils
 import json
 
-outputPath = '/tmp/spark/checkpoint_01'
-
-
-# -------------------------------------------------
-# Getting the SQL Template
-# -------------------------------------------------
-# def get_sql_query():
-#     strSQL = ''
-#
-#     try:
-#         f = open('sql/transaction_calc.sql', 'r')
-#         strSQL = f.read()
-#         f.close()
-#     except Exception as e:
-#         print("--> Opps! I can't open the file transaction_calc.sql", e)
-#
-#     return strSQL
+outputPath = '/tmp/spark/checkpoint'
 
 
 # -------------------------------------------------
@@ -54,17 +37,18 @@ def process(time, rdd):
     try:
         spark = getSparkSessionInstance(rdd.context.getConf())
 
-        rowRdd = rdd.map(lambda w: Row(branch=w['branch'],
-                                       currency=w['currency'],
-                                       amount=w['amount']))
+        rowRdd = rdd.map()
+        # rowRdd = rdd.map(lambda w: Row(branch=w['branch'],
+        #                                currency=w['currency'],
+        #                                amount=w['amount']))
 
         testDataFrame = spark.createDataFrame(rowRdd)
 
         testDataFrame.createOrReplaceTempView("treasury_stream")
 
-        # sql_query = get_sql_query()
-        # testResultDataFrame = spark.sql(sql_query)
-        # testResultDataFrame.show(n=5)
+        sql_query = get_sql_query()
+        testResultDataFrame = spark.sql(sql_query)
+        testResultDataFrame.show(n=5)
 
         # # Insert into DB
         # try:
@@ -105,9 +89,10 @@ def createContext():
                             broker_list={} topic={}".format(broker_list, topic))
 
     parsed_lines = directKafkaStream.map(lambda v: json.loads(v[1]))
+    print(parsed_lines)
 
     # RDD handling
-    parsed_lines.foreachRDD(process)
+    # parsed_lines.foreachRDD(process)
 
     return ssc
 
@@ -122,16 +107,24 @@ if __name__ == "__main__":
         exit(-1)
 
     print("--> Creating new context")
-    if os.path.exists(outputPath):
-        shutil.rmtree('outputPath')
+    # if os.path.exists(outputPath):
+    #     shutil.rmtree('outputPath')
+    try:
+        os.mkdir(outputPath, mode=0o777, dir_fd=None)
+    except FileExistsError:
+        i = 1
+        while True:
+            try:
+                os.mkdir(outputPath + str(i), mode=0o777, dir_fd=None)
+                break
+            except FileExistsError:
+                i += 1
 
     ssc = StreamingContext.getOrCreate(outputPath, lambda: createContext())
     ssc.start()
     ssc.awaitTermination()
 
 # # Launch
-# spark-submit \
-# --packages org.apache.spark:spark-streaming-kafka-0-8_2.11:2.0.2,\
-# org.postgresql:postgresql:9.4.1207 \
-# spark_streamer.py localhost:9092 transaction
+# путь до JAR файла можете сами настроить
+# spark-submit --jars spark-streaming-kafka-0-8-assembly_2.11-2.4.7.jar spark_streamer.py localhost:9092 transaction
 
