@@ -22,7 +22,7 @@ def get_string_data(prometheus_metric='PIDMemory'):
         # print(list_data)
         print(ctime(dict_timestamp['timestamp']))
     except Exception as e:
-        print('Получили на вход пустой timestamp. Не посылаем дальше.')
+        print('Получили пустой timestamp.')
     return dict_timestamp
 
 
@@ -32,7 +32,8 @@ producer = KafkaProducer(bootstrap_servers=bootstrap_servers, value_serializer=l
 
 
 def send_to_topic(count_message=20):
-    for mes in range(count_message):
+    while True:
+    # for mes in range(count_message):
         data = get_string_data()
         # data = randint(-10, 10)
         try:

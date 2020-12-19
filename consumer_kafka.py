@@ -12,9 +12,12 @@ from pyspark.streaming.kafka import KafkaUtils
 def handler(message):
     records = message.collect()  # сбор rdd в список
     for record in records:
-        value = eval(record[1])
-        print(ctime(value['timestamp']))
-        print(value)
+        try:
+            value = eval(record[1])
+            print(ctime(value['timestamp']))
+            print(value)
+        except Exception as e:
+            print('Получили пустой timestamp.')
 
 
 def reading_kafka_spark(port: str, topic: str):
