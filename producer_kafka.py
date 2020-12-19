@@ -12,13 +12,17 @@ def get_string_data(prometheus_metric='PIDMemory'):
     json_data = response.json()
     list_data = json_data['data']['result']
     dict_timestamp = dict()
-    dict_timestamp['timestamp'] = list_data[0]['values'][0][0] # периодический непонятный краш тут
-    for metric in list_data:
-        for t in metric['values']:
-            # dict_timestamp[t[0]]['timestamp'] = t[0]
-            dict_timestamp[metric['metric']['resource_type']] = float(t[1])
-    # print(list_data)
-    print(ctime(dict_timestamp['timestamp']))
+
+    try:
+        dict_timestamp['timestamp'] = list_data[0]['values'][0][0] # периодический непонятный краш тут
+        for metric in list_data:
+            for t in metric['values']:
+                # dict_timestamp[t[0]]['timestamp'] = t[0]
+                dict_timestamp[metric['metric']['resource_type']] = float(t[1])
+        # print(list_data)
+        print(ctime(dict_timestamp['timestamp']))
+    except Exception as e:
+        print('Получили на вход пустой timestamp. Не посылаем дальше.')
     return dict_timestamp
 
 
