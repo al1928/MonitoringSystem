@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import json
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,14 +11,7 @@ from pyspark.sql.functions import avg
 from pyspark.sql.session import SparkSession
 
 
-def size_df(df) -> tuple:
-    # возвращает кол-во строк и столбцов датафрейма
-    columns_count = len(df.columns)
-    rows_count = df.count()
-    return rows_count, columns_count
-
-
-def del_points(df):  # УБИРАЕТ ТОЧКИ ИЗ НАЗВАНИЙ СТОЛБЦОВ
+def delPoints(df):  # УБИРАЕТ ТОЧКИ ИЗ НАЗВАНИЙ СТОЛБЦОВ
     tempList = []
     for col in df.columns:
         new_name = col.strip()
@@ -32,21 +23,20 @@ def del_points(df):  # УБИРАЕТ ТОЧКИ ИЗ НАЗВАНИЙ СТОЛ�
     return df_spark
 
 
-def del_time(df):  # удаление столбца Time
+def delTime(df):  # удаление столбца Time
     columns_to_drop = ['timestamp']
     df_spark = df.drop(*columns_to_drop)
     return df_spark
 
 
 def delColumnsWithTheSameValue(df):  # УДАЛЕНИЕ СТОЛБЦОВ С ОДИНАКОВЫМ ЗНАЧЕНИЕМ
-    # count_distinct_df = df.select([approx_count_distinct(x).alias("{0}".format(x)) for x in df.columns])
-    # dict_of_columns = count_distinct_df.toPandas().to_dict(orient='list')
-    # # сохранение колонок, в которых только 1 значение
-    # distinct_columns = [k for k, v in dict_of_columns.items() if v == [1]]
-    # df_spark = df.drop(*distinct_columns)
-    # print("Размер датафрейма с обрезанными константными столбцами: ", size_df(df_spark))
-    # return df_spark
-    pass
+    count_distinct_df = df.select([approx_count_distinct(x).alias("{0}".format(x)) for x in df.columns])
+    dict_of_columns = count_distinct_df.toPandas().to_dict(orient='list')
+    # сохранение колонок, в которых только 1 значение
+    distinct_columns = [k for k, v in dict_of_columns.items() if v == [1]]
+    df_spark = df.drop(*distinct_columns)
+    return df_spark
+
 
 def NanSwupNull(df):  # Замена Nan на Null
     df_spark = df.replace(float('nan'), None)
@@ -58,13 +48,13 @@ def fill_with_mean(this_df, exclude=set()):  # ЗАМЕНА NULL НА СРЕДН
     return this_df.na.fill(stats.first().asDict())
 
 
-# df_spark = del_time(df_spark)
+# df_spark = delTime(df_spark)
 # df_spark = NanSwupNull(df_spark)
 # df_spark = fill_with_mean(df_spark, [])
 # df_spark = delColumnsWithTheSameValue(df_spark)
 
 
-def getJsonOfQuery(prometheus_metric: str) -> list:
+def getJsonOfQuery(prometheus_metric: str):
     # по названию метрики из прометеуса возвращает json данных (в виде списка)
     response = requests.get(f'http://localhost:9090/api/v1/query?query={prometheus_metric}[24h]')
     json_data = response.json()
@@ -79,30 +69,30 @@ def getJsonOfFile(file_name: str):
     return json_data
 
 
-# def getResourceDict(json_data: json):
-#     # по листу метрики из json данных возвращает словарь процессов
-#     # Пока не используется
-#     list_data = json_data['data']['result']  # список словарей по процессам
-#     # print(list_data[:3])
-#     resourceTypeDict = dict(map(lambda x: (x["metric"]["resource_type"], x["values"]), list_data))
-#     # iterObj = iter(resourceTypeDict)
-#     # print(list(iterObj))
-#     return resourceTypeDict
+def getResourceDict(json_data: json):
+    # по листу метрики из json данных возвращает словарь процессов
+    # Пока не используется
+    list_data = json_data['data']['result']  # список словарей по процессам
+    # print(list_data[:3])
+    resourceTypeDict = dict(map(lambda x: (x["metric"]["resource_type"], x["values"]), list_data))
+    # iterObj = iter(resourceTypeDict)
+    # print(list(iterObj))
+    return resourceTypeDict
 
 
-def dictOfJsons(json_data, columns_count=None) -> dict:
+def dictOfJsons(json_data, column_count):
     # возвращает словарь типа: key = timestamp, value = {timestamp:t1, Metric1: V1 ...}
     list_data = json_data['data']['result']
     dict_timestamp = dict()
-    if columns_count is None:
-        columns_count = len(list_data)
-    for metric in list_data[:columns_count]:
+    for metric in list_data[:column_count]:
         for t in metric['values']:
             dict_timestamp[t[0]] = {}
-    for metric in list_data[:columns_count]:
+    for metric in list_data[:column_count]:
         for t in metric['values']:
             dict_timestamp[t[0]]['timestamp'] = t[0]
             dict_timestamp[t[0]][metric['metric']['resource_type']] = float(t[1])
+    # print(f"Size dict_timestamp: {len(list(dict_timestamp))}"
+    #       f"\n Size uniq value {len(set(dict_timestamp))}")
     return dict_timestamp
 
 
@@ -111,7 +101,6 @@ def createDF(dict_timestamp: dict, spark):
     list_of_dicts = dict_timestamp.values()
     rdd = spark.sparkContext.parallelize(list_of_dicts)
     df = rdd.toDF()
-    print('Размер исходного Датафрейма: ', size_df(df))
     return df
 
 
@@ -134,15 +123,18 @@ def getJoinedPDF(resourceTypeDict: dict, column_count: int):
 
 def buildKMeans(spark_df, k: int):
     # возвращает центроиды кластеров
-    df_without_time = del_time(spark_df)
-    vecAssembler = VectorAssembler(inputCols=df_without_time.columns, outputCol="features")
+    vecAssembler = VectorAssembler(inputCols=spark_df.columns[:-1], outputCol="features")
     df_kmeans = vecAssembler.transform(spark_df).select('timestamp', 'features')
     df_kmeans.show()
     kmeans = KMeans().setK(k).setSeed(1).setFeaturesCol("features")
     model = kmeans.fit(df_kmeans)
-    return model
+    centers = model.clusterCenters()
+    print("Cluster Centers: ")
+    for center in centers:
+        print(center)
 
-def MethodSilhouette(spark_df, k_max=5) -> int:
+
+def MethodSilhouette(spark_df, k_max: int):
     # возвращает оптимальное кол-во кластеров
     k_max += 1
     vecAssembler = VectorAssembler(inputCols=spark_df.columns[:-1], outputCol="features")
@@ -156,55 +148,37 @@ def MethodSilhouette(spark_df, k_max=5) -> int:
         cost[k] = evaluator.evaluate(pred)
     max_silhouette = max(cost)
     k_opt = list(cost).index(max_silhouette)
-    print(f'Список значений для различных k: {cost}, '
-          f'\n Оптимальное (максимальное из списка) количество кластеров: {k_opt}')
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(range(2, k_max), cost[2:k_max])
     ax.set_xlabel('k')
     ax.set_ylabel('cost')
     plt.plot(k_opt, max_silhouette, 'o-r', alpha=0.7, label="first", lw=5, mec='b', mew=2, ms=10)
-    plt.title('Метод силуэтов')
     plt.show()
     return k_opt
 
-def get_model_kmeans(spark_df, k):
 
-    df_rename = del_points(spark_df)
-    df_without_nan = NanSwupNull(df_rename)
-    df_avg_null = fill_with_mean(df_without_nan, [])
-    print(f"Размер датафрейма с усредненными пропусками и переименнованными "
-          f"столбцами: ", size_df(df_avg_null))
-    df_for_kmeans = df_avg_null
-    model = buildKMeans(df_for_kmeans, k)
-
-    centers = model.clusterCenters()
-    print("Cluster Centers: ")
-    for center in centers:
-        print(center)
-
-    path = "q3state_16min.model"
-    # model.write().overwrite().save(path)
-
+spark = SparkSession.builder \
+    .master("local") \
+    .appName("HistData") \
+    .config("spark.debug.maxToStringFields", "1000") \
+    .config("spark.driver.memory", "4G")\
+    .getOrCreate()
 #   spark.conf.set("spark.sql.debug.maxToStringFields", "1000")
 
-# json_data = getJsonOfFile(file_name)
-# spark_df = createDF(dictOfJsons(json_data), spark)  # после json_data указывается необходимое кол-во столбцов
-# df_rename = del_points(spark_df)
-# df_without_nan = NanSwupNull(df_rename)
-# df_avg_null = fill_with_mean(df_without_nan, [])
-# print(f"Размер датафрейма с усредненными пропусками и переименнованными "
-#       f"столбцами: ", size_df(df_avg_null))
+file_name = 'query'
+json_data = getJsonOfFile(file_name)
+print("1")
+spark_df = createDF(dictOfJsons(json_data, 100), spark)  # вместо 100 указать кол-во необходимых столбцов
+print("2")
+#spark_df.show()
+df_rename = delPoints(spark_df)
+df_without_nan = NanSwupNull(df_rename)
+df_avg_null = fill_with_mean(df_without_nan, [])
+print(f"Размер датафрейма с усредненными пропусками и переименнованными "
+      f"столбцами: {df_avg_null.count()}x{len(df_avg_null.columns)}")
+df_cut = delColumnsWithTheSameValue(df_avg_null)
+print(f"Размер датафрейма с обрезанными константными столбцами: "
+      f"{df_cut.count()}x{len(df_cut.columns)}")
 
-
-if __name__ == "__main__":
-    spark = SparkSession.builder \
-        .master("local") \
-        .appName("HistData") \
-        .config("spark.debug.maxToStringFields", "1000") \
-        .getOrCreate()
-
-    filename = 'query3state_16min'
-    json_data = getJsonOfFile(filename)
-    spark_df = createDF(dictOfJsons(json_data), spark)
-
-    get_model_kmeans(spark_df, 3)
+k = MethodSilhouette(df_cut, 10)  # 8- максимальное кол-во кластеров для метода силуэтов
+print("Оптимальное значение k: ", k)
