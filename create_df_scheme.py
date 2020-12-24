@@ -1,21 +1,33 @@
-import json
-from json import dumps
-from kafka import KafkaProducer
-from collections import OrderedDict
-import pyspark.sql.functions
-from pyspark.ml.clustering import KMeans
-from pyspark.ml.evaluation import ClusteringEvaluator
-from pyspark.ml.feature import VectorAssembler
-from pyspark.sql.functions import approx_count_distinct
-from pyspark.sql.functions import avg
+# import json
+# from json import dumps
+# from kafka import KafkaProducer
+# from collections import OrderedDict
+# import pyspark.sql.functions
+# from pyspark.ml.clustering import KMeans
+# from pyspark.ml.evaluation import ClusteringEvaluator
+# from pyspark.ml.feature import VectorAssembler
+# from pyspark.sql.functions import approx_count_distinct
+# from pyspark.sql.functions import avg
 from pyspark.sql.session import SparkSession
 
 
-spark = SparkSession.builder \
-    .master("local") \
-    .appName("HistData") \
-    .config("spark.debug.maxToStringFields", "1000") \
-    .getOrCreate()
+def getShema():
+    spark = SparkSession.builder \
+        .master("local") \
+        .appName("HistData") \
+        .config("spark.debug.maxToStringFields", "1000") \
+        .getOrCreate()
+
+    spark.sparkContext.setLogLevel("ERROR")
+    df2 = spark.read.json("one_line.json")
+    df2.printSchema()
+    # print(df2.schema)
+    df = spark.createDataFrame(spark.sparkContext.emptyRDD(), df2.schema)
+    spark.stop()
+    # print("\n\n\n\n\n\n\n\n\n\n")
+    # print(df)
+
+    return df2.schema
 
 # #
 # with open("newjson.json", "r") as f:
@@ -39,17 +51,16 @@ spark = SparkSession.builder \
 
 #df555 = spark.createDataFrame(data=text,schema=schema)
 
-df2 = spark.read.json("one_line.json")
+
 
 # df555.show(truncate=False)
 
 # = df2._jdf.schema().treeString()
+
 #print(v)
-print(df2.schema)
 
-df = spark.createDataFrame(spark.sparkContext.emptyRDD(),df2.schema)
 
-print(df)
+
 
 #df555 = spark.createDataFrame(data=data5,schema=df2.schema)
 # schema = pyspark.sql.functions.schema_of_json('{"a": 1}')

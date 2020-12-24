@@ -4,18 +4,76 @@ from time import ctime
 from kafka import KafkaConsumer
 import sys
 
+import os.path
+
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
+from pyspark.sql.dataframe import DataFrame
+from pyspark.sql.session import SparkSession
+from pyspark.sql.context import SQLContext
+
+import create_df_scheme
+from pyspark.sql.functions import from_json
+
+
+shema = create_df_scheme.getShema()
+sc = SparkContext
+json_file = 'brutal.json'
 
 
 def handler(message):
     records = message.collect()  # сбор rdd в список
     for record in records:
         try:
+            global json_file
+            if os.path.exists(json_file):
+                print('aaa')
+                os.remove(json_file)
+            brutal = open(json_file, 'w')
             value = eval(record[1])
+            # print(value)
+            # print(record)
+            brutal.write(str(value))
+            brutal.close()
+            # exit(1)
+            # DataFrame.
+            # print(sc.parallelize([json_file]))
+            # value.printSchema()
+            # json_df = from_json(value, shema)
             print(ctime(value['timestamp']))
-            print(value)
+            # print(value)
+            # global spark
+            global shema
+            # global sc
+            spark = SparkSession.builder\
+                .getOrCreate()
+
+            # df = spark.read.json(sc.parallelize([value]))
+            # df.show(truncate=False)
+
+            df = spark.read.schema(shema).json(json_file)
+            # df.printSchema()
+            df.show(n=1)
+
+            # df = spark.createDataFrame(spark.sparkContext.emptyRDD(), shema)
+
+            # df = spark.createDataFrame(record, shema)
+
+            # print(message.toDF())
+
+            # df = spark.createDataFrame(message, shema)
+            # df.printSchema()
+            # print(df)
+            # df.show(n=1)
+
+            # df = spark.read.json(sc.parallelize([value]))
+            # print(df)
+
+
+            # df = spark.read.json(Seq(jsonStr).toDS)
+            # spark.read.json(sc.parallelize([newJson]))
+            # df = pyspark.read.json(Seq(jsonStr).toDS)
         except Exception as e:
             print('Получили пустой timestamp.')
 
