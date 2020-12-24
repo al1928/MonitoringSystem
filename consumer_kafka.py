@@ -66,7 +66,6 @@ def get_centers(spark, model_Kmeans='3metrics.model'):
     # conf = SparkConf().setAppName("Classification")
     # sc = SparkContext(conf=spark)
     model = KMeansModel.load(model_Kmeans)
-    model.predict([0, 0, 3, 4])
     centers = model.clusterCenters()
     return centers
 
@@ -88,15 +87,17 @@ def transform_row(data=None):
     df_row.show()
     df_rename = HistoricalKMeansModel.del_points(df_row)
     df_for_vec = HistoricalKMeansModel.del_time(df_rename)
-
+    return data.values()
 
 
 # transform_row()
 
-
+def euclidean(v1, v2):
+    return sum((p-q)**2 for p, q in zip(v1, v2)) ** .5
 
 def handler(message):
-    records = message.collect()  # сбор rdd в список
+    records = message.collect()
+    centers = get_centers(spark)# сбор rdd в список
     for record in records:
         try:
             # global json_file, shema, cluster_centers
@@ -109,7 +110,12 @@ def handler(message):
 
             print(ctime(value['timestamp']))
             print(value)
-            # transform_row(value)
+            row = transform_row(value)
+            cost = []
+            for center in centers:
+                cost.append(euclidean(row, center))
+            print(cost)
+            print(f"Точка принадлежит класстеру {cost.index(max(cost))+1}")
             # spark = SparkSession.builder.getOrCreate()
             #
             # df = spark.read.schema(shema).json(json_file)
@@ -122,7 +128,7 @@ def handler(message):
 
 def reading_kafka_spark(port: str, topic: str):
     # чтение топика кафки чпо порту через спарк
-    sc = SparkContext(appName="Classification")
+    sc = spark.sparkContext
     ssc = StreamingContext(sc, 15)
     sc.setLogLevel("WARN")
     sc.setLogLevel("ERROR")
