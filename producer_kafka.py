@@ -1,3 +1,5 @@
+from random import randint
+
 import requests
 from json import dumps
 from time import ctime, sleep
@@ -14,10 +16,9 @@ def get_string_data(prometheus_metric='PIDMemory'):
     dict_timestamp = dict()
 
     try:
-        dict_timestamp['timestamp'] = list_data[0]['values'][0][0] # периодический непонятный краш тут
+        dict_timestamp['timestamp'] = list_data[0]['values'][0][0]
         for metric in list_data:
             for t in metric['values']:
-                # dict_timestamp[t[0]]['timestamp'] = t[0]
                 dict_timestamp[metric['metric']['resource_type']] = float(t[1])
         # print(list_data)
         print(ctime(dict_timestamp['timestamp']))
@@ -26,7 +27,7 @@ def get_string_data(prometheus_metric='PIDMemory'):
     return dict_timestamp
 
 
-my_topic = 'transaction'
+my_topic = 'test'
 bootstrap_servers = ['localhost:9092']
 producer = KafkaProducer(bootstrap_servers=bootstrap_servers, value_serializer=lambda x: dumps(x).encode('utf-8'))
 
@@ -35,7 +36,7 @@ def send_to_topic(count_message=20):
     while True:
     # for mes in range(count_message):
         data = get_string_data()
-        # data = randint(-10, 10)
+    #     data = randint(-10, 10)
         try:
             future = producer.send(topic=my_topic, value=data)
             record_metadata = future.get(timeout=15)
@@ -46,7 +47,7 @@ def send_to_topic(count_message=20):
                           record_metadata.topic,
                           record_metadata.partition,
                           record_metadata.offset))
-            sleep(20)
+            sleep(15)
 
         except Exception as e:
             print('--> It seems an Error occurred: {}'.format(e))
