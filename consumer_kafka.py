@@ -6,8 +6,7 @@ import sys
 
 import os.path
 import create_df_scheme
-# По хорошему надо бы отсюда импортировать а не запихивать сюда код, но там стоит запуск что мешает норм работе...
-# from HistoricalKMeansModel import buildKMeans
+
 
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
@@ -21,13 +20,22 @@ from pyspark.sql.functions import from_json
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.feature import VectorAssembler
 
+# По хорошему надо бы отсюда импортировать, а не запихивать сюда код, но там стоит запуск что мешает норм работе...
+# from HistoricalKMeansModel import buildKMeans
 def buildKMeans(spark_df, k: int):
     # возвращает центроиды кластеров
+    print('a')
     vecAssembler = VectorAssembler(inputCols=spark_df.columns[:-1], outputCol="features")
+    print('a1')
     df_kmeans = vecAssembler.transform(spark_df).select('timestamp', 'features')
-    df_kmeans.show()
+    print('a2')
+    # df_kmeans.show()
+    print('a3')
     kmeans = KMeans().setK(k).setSeed(1).setFeaturesCol("features")
-    model = kmeans.fit(df_kmeans)
+    print('a4')
+    # КРашится тут
+    model = kmeans.fit(df_kmeans) # FIXME
+    print('a5')
     centers = model.clusterCenters()
     print("Cluster Centers: ")
     for center in centers:
@@ -60,7 +68,8 @@ def handler(message):
 
             df = spark.read.schema(shema).json(json_file)
             df.show(n=1)
-            print(f'Центры кластеров: {cluster_centers}')
+            # !!!!!!!!!!  Сюда или куда нибудь ниже надо добавить рассчет расстояни до центров кластеров и вывод.
+            # FIXME
         except Exception as e:
             print('Получили пустой timestamp.')
 
@@ -78,9 +87,9 @@ def reading_kafka_spark(port: str, topic: str):
     spark = SparkSession.builder.getOrCreate()
     hist_df = spark.read.schema(shema).json('query3state_16min.json')
     # Нахождение центров кластеров (можно расхардкодить 3, но тогда будет работать оч долго)
-    # Сейчас не работает
-    # cluster_centers = buildKMeans(hist_df, 3)
-    # print(f'Центры кластеров: {cluster_centers}')
+    # Сейчас не работает строчка ниже
+    cluster_centers = buildKMeans(hist_df, 3) # FIXME
+    print(f'Центры кластеров: {cluster_centers}')
 
     # brokers, topic = sys.argv[1:]
     kafkaStream = KafkaUtils.createDirectStream(ssc, [topic], {"metadata.broker.list": port})
