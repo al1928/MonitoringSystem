@@ -133,6 +133,8 @@ def buildKMeans(spark_df, k: int):
     for center in centers:
         print(center)
 
+    return centers
+
 
 def MethodSilhouette(spark_df, k_max: int):
     # возвращает оптимальное кол-во кластеров
