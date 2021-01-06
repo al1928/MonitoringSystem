@@ -5,7 +5,9 @@ import numpy as np
 import requests
 from pyspark.sql import dataframe
 from pyspark.sql.types import *
+""""""
 
+# "привет мир!"
 spark = SparkSession.builder \
     .master("local") \
     .appName("HistData") \
